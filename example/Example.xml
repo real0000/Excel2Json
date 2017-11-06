@@ -1,0 +1,36 @@
+<root filename="Example.xlsx" rootDir="./">
+	<Tables>
+		<Table sheet="Example1" name="Table1" descRow="2" startColumn="1">
+			<Data name="id" type="int"/>
+			<Data name="text" type="text"/>
+			<Data name="int" type="int"/>
+			<Data name="float" type="float"/>
+			<Data name="link" type="int"/>
+		</Table>
+		<Table sheet="Example2" name="Table2" descRow="1" startColumn="2">
+			<Data name="link" type="int"/>
+			<Data name="sub_id" type="int"/>
+			<Data name="link2" type="int"/>
+		</Table>
+		<Table sheet="Example3" name="Table3" descRow="7" startColumn="2">
+			<Data name="link2" type="int"/>
+			<Data name="int" type="int"/>
+			<Data name="string" type="text"/>
+		</Table>
+	</Tables>
+	<Outputs>
+		<Output file="Example.json" rootTable="Table1" key="id">
+			<Data name="id"/>
+			<Data name="text"/>
+			<Data name="int"/>
+			<Data name="float" />
+			<Data name="link" linkType="dict" table="Table2" key="sub_id">
+				<Data name="sub_id"/>
+				<Data name="link2" linkType="array" table="Table3">
+					<Data name="int"/>
+					<Data name="string"/>
+				</Data>
+			</Data>
+		</Output>
+	</Outputs>
+</root>
