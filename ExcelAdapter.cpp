@@ -188,7 +188,7 @@ void XlsxLoader::initSheet(std::string a_SheetName)
 		{
 			setCell(l_Row, l_Column, l_pBuff);
 			++l_Column;
-			free(l_pBuff);
+			//free(l_pBuff);
 		}
 		++l_Row;
 		l_Column = 0;

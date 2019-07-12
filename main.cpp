@@ -10,7 +10,7 @@
 #include "Converter.h"
 
 //
-// command : Excel2Json <setting file path>
+// command : Excel2Json -f <setting file path> [-pretty]
 //
 
 int main(int a_Argc, char *a_Argv[])

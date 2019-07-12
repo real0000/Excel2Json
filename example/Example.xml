@@ -32,5 +32,6 @@
 				</Data>
 			</Data>
 		</Output>
+		<Output file="SimpleExample.json" rootTable="Table1" key="id" data="text" simple="1"/>
 	</Outputs>
 </root>

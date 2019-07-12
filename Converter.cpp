@@ -119,6 +119,7 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 	TableNode *l_pRoot = nullptr;
 	
 	Table *l_pRootTable = nullptr;
+	bool l_bSimple = false;
 	{// init root
 		std::string l_TableName(a_FileRoot.get("<xmlattr>.rootTable", ""));
 		auto l_TableIt = m_Tables.find(l_TableName);
@@ -129,28 +130,96 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 		auto l_KeyIt = l_TableIt->second->m_Column.find(l_KeyID);
 		if( l_TableIt->second->m_Column.end() == l_KeyIt ) return;
 
-		l_pRoot = new TableNode();
-		l_pRoot->m_pRefTable = l_pRootTable;
-		l_pRoot->m_KeyColumn = l_KeyIt->second.first;
+		l_bSimple = a_FileRoot.get("<xmlattr>.simple", 0) != 0;
+
+		if( !l_bSimple )
+		{
+			l_pRoot = new TableNode();
+			l_pRoot->m_pRefTable = l_pRootTable;
+			l_pRoot->m_KeyColumn = l_KeyIt->second.first;
+		}
 	}
-
-	// init tree
-	initOutputNode(l_pRoot, a_FileRoot, l_pRootTable);
-
-	// init buffer
+	
 	rapidjson::Document l_FileBuffer(rapidjson::kObjectType);
-	auto &l_Allocator = l_FileBuffer.GetAllocator();
-	m_Source.setSheet(l_pRootTable->m_Sheetname);
-	for( unsigned int r=0 ; r<l_pRootTable->m_NumRow ; ++r )
+	if( l_bSimple )
 	{
-		rapidjson::Value l_Obj;
-		l_Obj.SetObject();
+		ColumnInfo *l_pKeyColumn = nullptr;
+		ColumnInfo *l_pDataColumn = nullptr;
+		{
+			std::string l_KeyName(a_FileRoot.get("<xmlattr>.key", ""));
+			std::string l_DataName(a_FileRoot.get("<xmlattr>.data", ""));
+		
+			auto l_KeyIt = l_pRootTable->m_Column.find(l_KeyName);
+			if( l_pRootTable->m_Column.end() != l_KeyIt ) l_pKeyColumn = &l_KeyIt->second;
 
-		initOutputBuffer(l_FileBuffer, l_Obj, l_pRoot, r + l_pRootTable->m_StartRow);
+			auto l_DataIt = l_pRootTable->m_Column.find(l_DataName);
+			if( l_pRootTable->m_Column.end() != l_DataIt ) l_pDataColumn = &l_DataIt->second;
+		}
+
+		if( nullptr == l_pKeyColumn || nullptr == l_pDataColumn ) return;
+
+		std::function<void(rapidjson::Document&, std::string&, std::string&)> l_pAddFunc = nullptr;
+		switch( l_pDataColumn->second )
+		{
+			case CELL_INT:
+				l_pAddFunc = [=](rapidjson::Document &a_Target, std::string &a_Key, std::string &a_Value)
+				{
+					auto &l_Allocator = a_Target.GetAllocator();
+
+					rapidjson::Value l_Key(a_Key.c_str(), l_Allocator);
+					a_Target.AddMember(l_Key, atoi(a_Value.c_str()), l_Allocator);
+				};
+				break;
+
+			case CELL_FLOAT:
+				l_pAddFunc = [=](rapidjson::Document &a_Target, std::string &a_Key, std::string &a_Value)
+				{
+					auto &l_Allocator = a_Target.GetAllocator();
+
+					rapidjson::Value l_Key(a_Key.c_str(), l_Allocator);
+					a_Target.AddMember(l_Key, atof(a_Value.c_str()), l_Allocator);
+				};
+				break;
+
+			case CELL_TEXT:
+				l_pAddFunc = [=](rapidjson::Document &a_Target, std::string &a_Key, std::string &a_Value)
+				{
+					auto &l_Allocator = a_Target.GetAllocator();
+
+					rapidjson::Value l_Key(a_Key.c_str(), l_Allocator);
+					rapidjson::Value l_Value(a_Value.c_str(), l_Allocator);
+					a_Target.AddMember(l_Key, l_Value, l_Allocator);
+				};
+				break;
+
+			default:break;
+		}
+
 		m_Source.setSheet(l_pRootTable->m_Sheetname);
+		for( unsigned int r=0 ; r<l_pRootTable->m_NumRow ; ++r )
+		{
+			l_pAddFunc(l_FileBuffer, m_Source.getCell(r + l_pRootTable->m_StartRow, l_pKeyColumn->first), m_Source.getCell(r + l_pRootTable->m_StartRow, l_pDataColumn->first));
+		}
+	}
+	else
+	{
+		// init tree
+		initOutputNode(l_pRoot, a_FileRoot, l_pRootTable);
 
-		rapidjson::Value l_Key(m_Source.getCell(r + l_pRootTable->m_StartRow, l_pRoot->m_KeyColumn).c_str(), l_Allocator);
-		l_FileBuffer.AddMember(l_Key, l_Obj, l_Allocator);
+		// init buffer
+		auto &l_Allocator = l_FileBuffer.GetAllocator();
+		m_Source.setSheet(l_pRootTable->m_Sheetname);
+		for( unsigned int r=0 ; r<l_pRootTable->m_NumRow ; ++r )
+		{
+			rapidjson::Value l_Obj;
+			l_Obj.SetObject();
+
+			initOutputBuffer(l_FileBuffer, l_Obj, l_pRoot, r + l_pRootTable->m_StartRow);
+			m_Source.setSheet(l_pRootTable->m_Sheetname);
+
+			rapidjson::Value l_Key(m_Source.getCell(r + l_pRootTable->m_StartRow, l_pRoot->m_KeyColumn).c_str(), l_Allocator);
+			l_FileBuffer.AddMember(l_Key, l_Obj, l_Allocator);
+		}
 	}
 
 	// write buffer
@@ -239,7 +308,7 @@ void Converter::initOutputBuffer(rapidjson::Document &a_Root, rapidjson::Value &
 			switch( l_pCurrChild->m_Type )
 			{
 				case CELL_FLOAT:{
-					float l_Val = atof(m_Source.getCell(a_Row, l_pCurrChild->m_Column).c_str());
+					double l_Val = atof(m_Source.getCell(a_Row, l_pCurrChild->m_Column).c_str());
 					a_Owner.AddMember(l_Key, l_Val, l_Allocator);
 					}break;
 
