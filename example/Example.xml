@@ -1,13 +1,13 @@
 <root filename="Example.xlsx" rootDir="./">
 	<Tables>
-		<Table sheet="Example1" name="Table1" descRow="2" startColumn="1">
+		<Table sheet="Example1" name="Table1" descRow="2" startColumn="B">
 			<Data name="id" type="int"/>
 			<Data name="text" type="text"/>
 			<Data name="int" type="int"/>
 			<Data name="float" type="float"/>
 			<Data name="link" type="int"/>
 		</Table>
-		<Table sheet="Example2" name="Table2" descRow="1" startColumn="2">
+		<Table sheet="Example2" name="Table2" descRow="1" startColumn="c">
 			<Data name="link" type="int"/>
 			<Data name="sub_id" type="int"/>
 			<Data name="link2" type="int"/>

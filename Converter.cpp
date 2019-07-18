@@ -70,7 +70,27 @@ void Converter::initSettings(boost::property_tree::ptree &a_SettingRoot)
 		if( !m_Source.setSheet(l_SheetName.c_str()) ) continue;
 
 		unsigned int l_DescRow = it->second.get("<xmlattr>.descRow", 0);
-		unsigned int l_StartCol = it->second.get("<xmlattr>.startColumn", 0);
+		unsigned int l_StartCol = 0;
+		{
+			std::string l_ColStr(it->second.get("<xmlattr>.startColumn", "0"));
+			if( isdigit(l_ColStr[0]) ) l_StartCol = atoi(l_ColStr.c_str());
+			else
+			{
+				auto l_ColIt = std::find_if(l_ColStr.begin(), l_ColStr.end(), [] (char a_Char){ return !isalpha(a_Char); });
+				if( l_ColIt != l_ColStr.end() )
+				{
+					printf("invalid column %s in table %s\n", l_ColStr.c_str(), l_SheetName.c_str());
+					continue;
+				}
+
+				for( unsigned int i=0 ; i<l_ColStr.size() ; ++i ) l_ColStr[i] = tolower(l_ColStr[i]);
+				for( unsigned int i=0 ; i<l_ColStr.size() ; ++i )
+				{
+					char l_Char = l_ColStr[l_ColStr.size() - i - 1];
+					l_StartCol += (l_Char - 'a') * pow(26, i);
+				}
+			}
+		}
 
 		if( m_Source.getCell(l_DescRow, l_StartCol).empty() ) continue;
 
