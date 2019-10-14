@@ -76,7 +76,7 @@ void Converter::initSettings(boost::property_tree::ptree &a_SettingRoot)
 			if( isdigit(l_ColStr[0]) ) l_StartCol = atoi(l_ColStr.c_str());
 			else
 			{
-				auto l_ColIt = std::find_if(l_ColStr.begin(), l_ColStr.end(), [] (char a_Char){ return !isalpha(a_Char); });
+				auto l_ColIt = std::find_if(l_ColStr.begin(), l_ColStr.end(), [] (char a_Char){ return !isalpha(a_Char) && '\0' != a_Char; });
 				if( l_ColIt != l_ColStr.end() )
 				{
 					printf("invalid column %s in table %s\n", l_ColStr.c_str(), l_SheetName.c_str());
