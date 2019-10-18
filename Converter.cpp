@@ -163,6 +163,7 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 			l_pRoot = new TableNode();
 			l_pRoot->m_pRefTable = l_pRootTable;
 			l_pRoot->m_KeyColumn = l_KeyIt->second.first;
+			l_pRoot->m_Type = l_KeyIt->second.second;
 		}
 	}
 	
@@ -681,8 +682,8 @@ std::string Converter::cellType2UE4Value(CellType a_Type, std::string a_TargetSt
 {
 	switch( a_Type )
 	{
-		case CELL_INT:	return a_TargetStr + " = FCString::Atoi(" + (a_bSrcIsJson ? "*" + a_SrcStr + "->AsString());" : a_SrcStr + ");");
-		case CELL_FLOAT:return a_TargetStr + " = FCString::Atof(" + (a_bSrcIsJson ? "*" + a_SrcStr + "->AsNumber());" : a_SrcStr + ");");
+		case CELL_INT:	return a_TargetStr + " = " + (a_bSrcIsJson ? "std::floor(" + a_SrcStr + "->AsNumber())" : "FCString::Atoi(*" + a_SrcStr + ");");
+		case CELL_FLOAT:return a_TargetStr + " = " + (a_bSrcIsJson ? a_SrcStr + "->AsNumber();" : "FCString::Atof(*" + a_SrcStr + ");");
 		case CELL_TEXT:	return a_TargetStr + " = " + a_SrcStr + (a_bSrcIsJson ? "->AsString();" : ";");
 		default:
 			assert(false && "invalid key cell type");
