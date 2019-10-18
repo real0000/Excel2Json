@@ -449,7 +449,7 @@ void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOut
 		"{\n"
 		"\tGENERATED_BODY()\n\n"
 		"public:\n"
-		"\tvoid parseTable(FString &a_Filename);\n\n";
+		"\tvoid parseTable(FString a_Filename);\n\n"
 		"\tUPROPERTY(BlueprintReadOnly, Category=\"DataTable\")\n";
 			
 	char l_Buff[256];
@@ -464,7 +464,7 @@ void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOut
 		"#include \"" + a_ClassName + ".h\"\n"
 		"#include \"" + m_UE4ProjectName + ".h\"\n"
 		"#include \"JsonUtilities.h\"\n\n"
-		"void U" + a_ClassName + "::parseTable(FString &a_Filename)\n"
+		"void U" + a_ClassName + "::parseTable(FString a_Filename)\n"
 		"{\n"
 		"\tFString l_FileString;\n"
 		"\tFFileHelper::LoadFileToString(l_FileString, *a_Filename);\n"
@@ -560,7 +560,7 @@ void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOut
 		"{\n"
 		"\tGENERATED_BODY()\n\n"
 		"public:\n"
-		"\tvoid parseTable(FString &a_Filename);\n\n";
+		"\tvoid parseTable(FString a_Filename);\n\n"
 		"\tUPROPERTY(BlueprintReadOnly, Category=\"DataTable\")\n";
 
 	char l_Buff[256];
@@ -648,7 +648,7 @@ void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOut
 	}
 
 	a_CppOutput +=
-		"void U" + a_ClassName + "::parseTable(FString &a_Filename)\n"
+		"void U" + a_ClassName + "::parseTable(FString a_Filename)\n"
 		"{\n"
 		"\tFString l_FileString;\n"
 		"\tFFileHelper::LoadFileToString(l_FileString, *a_Filename);\n"
