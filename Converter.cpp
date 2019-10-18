@@ -513,7 +513,7 @@ void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOut
 	{
 		a_HeaderOutput += "class U" + it->first->m_Tablename + ";\n";
 	}
-	a_HeaderOutput += "class U" + a_ClassName + "Parser;\n\n";
+	a_HeaderOutput += "class U" + a_ClassName + ";\n\n";
 
 	for( auto it = l_Tables.begin() ; it != l_Tables.end() ; ++it )
 	{
