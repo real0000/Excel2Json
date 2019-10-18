@@ -87,6 +87,7 @@ bool XlsLoader::load(std::string a_Filepath)
 		if( FREEXL_OK != freexl_get_worksheet_name(m_pHandle, i, &l_pName) ) continue;
 		m_SheetIndex.insert(std::make_pair(std::string(l_pName), i));
 	}
+	return true;
 }
 	
 bool XlsLoader::hasSheet(std::string a_SheetName)

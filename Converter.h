@@ -44,6 +44,7 @@ private:
 	{
 		std::map<std::string, ColumnInfo> m_Column;
 		std::string m_Sheetname;
+		std::string m_Tablename;
 		unsigned int m_StartRow, m_StartColumn, m_NumColumn, m_NumRow;
 	};
 	struct TableNode
@@ -75,9 +76,14 @@ private:
 	};
 	void initOutputNode(TableNode *a_pOwner, boost::property_tree::ptree &a_Node, Table *a_pCurrTable);
 	void initOutputBuffer(rapidjson::Document &a_Root, rapidjson::Value &a_Owner, TableNode *a_pNode, unsigned int a_Row);
+	void initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOutput, std::string a_ClassName, std::string a_ValueName, CellType a_KeyType, CellType a_ValueType);
+	void initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOutput, std::string a_ClassName, TableNode *a_pNode);
+	std::string cellType2UE4Type(CellType a_Type);
+	std::string cellType2UE4Value(CellType a_Type, std::string a_TargetStr, std::string a_SrcStr, bool a_bSrcIsJson);
 
 	std::map<std::string, Table*> m_Tables;
 	ExcelAdapter m_Source;
+	std::string m_UE4ProjectName;// for ue4 output
 };
 
 #endif

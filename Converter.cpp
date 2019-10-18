@@ -4,6 +4,7 @@
 //
 #include <direct.h>
 #include <deque>
+#include <set>
 
 #include "Converter.h"
 
@@ -19,6 +20,7 @@
 // Converter
 //
 Converter::Converter()
+	: m_UE4ProjectName("")
 {
 }
 
@@ -45,6 +47,7 @@ void Converter::convert(std::string a_SettingFile, bool a_bPretty)
 	{// init source file
 		std::string l_ExcelFile(l_Root.get("root.<xmlattr>.filename", ""));
 		std::string l_Chdir(l_Root.get("root.<xmlattr>.rootDir", ""));
+		m_UE4ProjectName = l_Root.get("root.<xmlattr>.ue4ProjectName", "");
 		if( l_ExcelFile.empty() ) return;
 
 		_chdir(l_Chdir.c_str());
@@ -87,7 +90,7 @@ void Converter::initSettings(boost::property_tree::ptree &a_SettingRoot)
 				for( unsigned int i=0 ; i<l_ColStr.size() ; ++i )
 				{
 					char l_Char = l_ColStr[l_ColStr.size() - i - 1];
-					l_StartCol += (l_Char - 'a') * pow(26, i);
+					l_StartCol += (l_Char - 'a') * (unsigned int)pow(26, i);
 				}
 			}
 		}
@@ -100,6 +103,7 @@ void Converter::initSettings(boost::property_tree::ptree &a_SettingRoot)
 		Table *l_pNewTable = new Table();
 		m_Tables.insert(std::make_pair(l_TableName, l_pNewTable));
 		l_pNewTable->m_Sheetname = l_SheetName;
+		l_pNewTable->m_Tablename = l_TableName;
 		l_pNewTable->m_StartRow = l_DescRow + 1;
 		l_pNewTable->m_StartColumn = l_StartCol;
 
@@ -140,6 +144,7 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 	
 	Table *l_pRootTable = nullptr;
 	bool l_bSimple = false;
+	std::string l_UE4Class("");
 	{// init root
 		std::string l_TableName(a_FileRoot.get("<xmlattr>.rootTable", ""));
 		auto l_TableIt = m_Tables.find(l_TableName);
@@ -151,6 +156,7 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 		if( l_TableIt->second->m_Column.end() == l_KeyIt ) return;
 
 		l_bSimple = a_FileRoot.get("<xmlattr>.simple", 0) != 0;
+		l_UE4Class = a_FileRoot.get("<xmlattr>.ue4Class", "");
 
 		if( !l_bSimple )
 		{
@@ -160,15 +166,15 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 		}
 	}
 	
+	std::string l_UE4Header(""), l_UE4Cpp("");
 	rapidjson::Document l_FileBuffer(rapidjson::kObjectType);
 	if( l_bSimple )
 	{
 		ColumnInfo *l_pKeyColumn = nullptr;
 		ColumnInfo *l_pDataColumn = nullptr;
+		std::string l_KeyName(a_FileRoot.get("<xmlattr>.key", ""));
+		std::string l_DataName(a_FileRoot.get("<xmlattr>.data", ""));
 		{
-			std::string l_KeyName(a_FileRoot.get("<xmlattr>.key", ""));
-			std::string l_DataName(a_FileRoot.get("<xmlattr>.data", ""));
-		
 			auto l_KeyIt = l_pRootTable->m_Column.find(l_KeyName);
 			if( l_pRootTable->m_Column.end() != l_KeyIt ) l_pKeyColumn = &l_KeyIt->second;
 
@@ -220,6 +226,12 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 		{
 			l_pAddFunc(l_FileBuffer, m_Source.getCell(r + l_pRootTable->m_StartRow, l_pKeyColumn->first), m_Source.getCell(r + l_pRootTable->m_StartRow, l_pDataColumn->first));
 		}
+
+		if( !l_UE4Class.empty() )
+		{
+			std::string l_UE4ClassName(l_UE4Class.substr(l_UE4Class.find_last_of('/') + 1));
+			initUE4Buffer(l_UE4Header, l_UE4Cpp, l_UE4ClassName, l_DataName, l_pKeyColumn->second, l_pDataColumn->second);
+		}
 	}
 	else
 	{
@@ -240,6 +252,12 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 			rapidjson::Value l_Key(m_Source.getCell(r + l_pRootTable->m_StartRow, l_pRoot->m_KeyColumn).c_str(), l_Allocator);
 			l_FileBuffer.AddMember(l_Key, l_Obj, l_Allocator);
 		}
+		
+		if( !l_UE4Class.empty() )
+		{
+			std::string l_UE4ClassName(l_UE4Class.substr(l_UE4Class.find_last_of('/') + 1));
+			initUE4Buffer(l_UE4Header, l_UE4Cpp, l_UE4ClassName, l_pRoot);
+		}
 	}
 
 	// write buffer
@@ -259,6 +277,18 @@ void Converter::output(boost::property_tree::ptree &a_FileRoot, bool a_bPretty)
 	if( nullptr != l_pFile )
 	{
 		fwrite(l_Output.GetString(), sizeof(char), l_Output.GetSize(), l_pFile);
+		fclose(l_pFile);
+	}
+
+	// write ue4 class
+	if( !l_UE4Class.empty() )
+	{
+		l_pFile = fopen((l_UE4Class + ".h").c_str(), "wb");
+		fwrite(l_UE4Header.c_str(), sizeof(char), l_UE4Header.length(), l_pFile);
+		fclose(l_pFile);
+
+		l_pFile = fopen((l_UE4Class + ".cpp").c_str(), "wb");
+		fwrite(l_UE4Cpp.c_str(), sizeof(char), l_UE4Cpp.length(), l_pFile);
 		fclose(l_pFile);
 	}
 
@@ -402,5 +432,262 @@ void Converter::initOutputBuffer(rapidjson::Document &a_Root, rapidjson::Value &
 			m_Source.setSheet(l_pCurrChild->m_pRefTable->m_Sheetname);
 		}
 	}
+}
+
+void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOutput, std::string a_ClassName, std::string a_ValueName, Converter::CellType a_KeyType, Converter::CellType a_ValueType)
+{
+	// setup header content
+	a_HeaderOutput = 
+		"// generate by Excel2Json\n\n"
+		"#pragma once\n\n"
+		"#include \"CoreMinimal.h\"\n"
+		"#include \"Engine/DataAsset.h\"\n"
+		"#include \"" + a_ClassName + ".generated.h\"\n\n"
+		"UCLASS()\n"
+		"class U" + a_ClassName + " : public UDataAsset\n"
+		"{\n"
+		"\tGENERATED_BODY()\n\n"
+		"public:\n"
+		"\tvoid parseTable(FString &a_Filename);\n\n";
+		"\tUPROPERTY(BlueprintReadOnly, Category=\"DataTable\")\n";
+			
+	char l_Buff[256];
+	snprintf(l_Buff, 256, "\tTMap<%s, %s> m_%s;\n", cellType2UE4Type(a_KeyType).c_str(), cellType2UE4Type(a_ValueType).c_str(), a_ValueName.c_str());
+	a_HeaderOutput += l_Buff;
+
+	a_HeaderOutput += "};\n";
+
+	// setup cpp content
+	a_CppOutput =
+		"// generate by Excel2Json\n\n"
+		"#include \"" + a_ClassName + ".h\"\n"
+		"#include \"" + m_UE4ProjectName + ".h\"\n"
+		"#include \"JsonUtilities.h\"\n\n"
+		"void U" + a_ClassName + "::parseTable(FString &a_Filename)\n"
+		"{\n"
+		"\tFString l_FileString;\n"
+		"\tFFileHelper::LoadFileToString(l_FileString, *a_Filename);\n"
+		"\tTSharedPtr<FJsonObject> l_JsonObject = MakeShareable(new FJsonObject());\n"
+		"\tTSharedRef<TJsonReader<> > l_JsonReader = TJsonReaderFactory<>::Create(l_FileString);\n"
+		"\tif( !FJsonSerializer::Deserialize(l_JsonReader, l_JsonObject) || !l_JsonObject.IsValid() ) return;\n\n"
+		"\tTMap< FString, TSharedPtr<FJsonValue> > &l_Root = l_JsonObject->Values;\n"
+		"\tfor( const TPair<FString, TSharedPtr<FJsonValue> > &l_Pair : l_Root )\n"
+		"\t{\n"
+		"\t\t" + cellType2UE4Value(a_KeyType, cellType2UE4Type(a_KeyType) + " l_Key", "l_Pair.Key", false) + "\n"
+		"\t\t" + cellType2UE4Value(a_ValueType, cellType2UE4Type(a_ValueType) + " l_Value", "l_Pair.Value", true) + "\n"
+		"\t\tm_" + a_ValueName + ".Add(l_Key, l_Value);\n"
+		"\t}\n"
+		"}";
+}
+
+void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOutput, std::string a_ClassName, TableNode *a_pNode)
+{
+	std::map<Table *, std::set<TableNode *> > l_Tables;
+	{
+		std::vector<TableNode *> l_Nodes(1, a_pNode);
+		for( unsigned int i=0 ; i<l_Nodes.size() ; ++i )
+		{
+			for( unsigned int j=0 ; j<l_Nodes[i]->m_Children.size() ; ++j ) l_Nodes.push_back(l_Nodes[i]->m_Children[j]);
+			if( l_Nodes[i]->m_Name.empty() ) continue;
+
+			auto it = l_Tables.find(l_Nodes[i]->m_pRefTable);
+			if( l_Tables.end() == it )
+			{
+				std::set<TableNode *> l_NewSet;
+				l_NewSet.insert(l_Nodes[i]);
+				l_Tables.insert(std::make_pair(l_Nodes[i]->m_pRefTable, l_NewSet));
+			}
+			else it->second.insert(l_Nodes[i]);
+		}
+	}
+
+	// setup header content
+	a_HeaderOutput = 
+		"// generate by Excel2Json\n\n"
+		"#pragma once\n\n"
+		"#include \"CoreMinimal.h\"\n"
+		"#include \"Engine/DataAsset.h\"\n"
+		"#include \"" + a_ClassName + ".generated.h\"\n\n";
+	for( auto it = l_Tables.begin() ; it != l_Tables.end() ; ++it )
+	{
+		a_HeaderOutput += "class U" + it->first->m_Tablename + ";\n";
+	}
+	a_HeaderOutput += "class U" + a_ClassName + "Parser;\n\n";
+
+	for( auto it = l_Tables.begin() ; it != l_Tables.end() ; ++it )
+	{
+		a_HeaderOutput +=
+			"UCLASS()\n"
+			"class U" + it->first->m_Tablename + " : public UDataAsset\n"
+			"{\n"
+			"\tGENERATED_BODY()\n\n"
+			"public:\n"
+			"\tvoid parseTable(TSharedPtr<FJsonObject> a_pNode);\n\n";
+			"private:\n";
+
+		std::set<TableNode *> &l_NodeSet = it->second;
+		for( auto l_ParamIt = l_NodeSet.begin() ; l_ParamIt != l_NodeSet.end() ; ++l_ParamIt )
+		{
+			a_HeaderOutput += "\tUPROPERTY(BlueprintReadOnly, Category=\"DataTable\")\n";
+			switch( (*l_ParamIt)->m_LinkType )
+			{
+				case LINK_OBJ:{
+					a_HeaderOutput += "\tU" + (*l_ParamIt)->m_pChildRefTable->m_Tablename + "* m_p" + (*l_ParamIt)->m_Name;
+					}break;
+
+				case LINK_DICT:{
+					a_HeaderOutput += "\tTMap<" + cellType2UE4Type((*l_ParamIt)->m_Type) + ", U" + (*l_ParamIt)->m_pChildRefTable->m_Tablename + "*> m_" + (*l_ParamIt)->m_Name;
+					}break;
+
+				case LINK_ARRAY:{
+					a_HeaderOutput += "\tTArray<U" + (*l_ParamIt)->m_pChildRefTable->m_Tablename + "*> m_" + (*l_ParamIt)->m_Name;
+					}break;
+
+				//case LINK_NONE:
+				default:{
+					a_HeaderOutput += "\t" + cellType2UE4Type((*l_ParamIt)->m_Type) + " m_" + (*l_ParamIt)->m_Name;
+					}break;
+			}
+			a_HeaderOutput += ";\n\n";
+		}
+		a_HeaderOutput += "};\n\n";
+	}
+	
+	a_HeaderOutput +=
+		"UCLASS()\n"
+		"class U" + a_ClassName + " : public UDataAsset\n"
+		"{\n"
+		"\tGENERATED_BODY()\n\n"
+		"public:\n"
+		"\tvoid parseTable(FString &a_Filename);\n\n";
+		"\tUPROPERTY(BlueprintReadOnly, Category=\"DataTable\")\n";
+
+	char l_Buff[256];
+	snprintf(l_Buff, 256, "\tTMap<%s, U%s*> m_%s;\n", cellType2UE4Type(a_pNode->m_Type).c_str(), a_pNode->m_pRefTable->m_Tablename.c_str(), a_pNode->m_pRefTable->m_Tablename.c_str());
+	a_HeaderOutput += l_Buff;
+
+	a_HeaderOutput += "};\n";
+
+	// setup cpp content
+	a_CppOutput =
+		"// generate by Excel2Json\n\n"
+		"#include \"" + a_ClassName + ".h\"\n"
+		"#include \"" + m_UE4ProjectName + ".h\"\n"
+		"#include \"JsonUtilities.h\"\n\n";
+	for( auto it = l_Tables.begin() ; it != l_Tables.end() ; ++it )
+	{
+		a_CppOutput +=
+			"void U" + it->first->m_Tablename + "::parseTable(TSharedPtr<FJsonObject> a_pNode)\n"
+			"{\n";
+			
+		std::set<TableNode *> &l_NodeSet = it->second;
+		for( auto l_ParamIt = l_NodeSet.begin() ; l_ParamIt != l_NodeSet.end() ; ++l_ParamIt )
+		{
+			switch( (*l_ParamIt)->m_LinkType )
+			{
+				case LINK_OBJ:{
+					a_CppOutput +=
+						"\tm_p" + (*l_ParamIt)->m_Name + " = NewObject<U" + (*l_ParamIt)->m_pChildRefTable->m_Tablename + ">();\n"
+						"\tm_p" + (*l_ParamIt)->m_Name + "->parseTable(" + "a_pNode->GetObjectField("+ (*l_ParamIt)->m_Name +")" +");\n";
+					}break;
+
+				case LINK_DICT:{
+					std::string l_ChildTypeStr = (*l_ParamIt)->m_pChildRefTable->m_Tablename;
+					a_CppOutput +=
+						"\n\t{\n"
+						"\t\tconst TSharedPtr<FJsonObject> l_Obj = a_pNode->GetObjectField(\"" + l_ChildTypeStr + "\")\n"
+						"\t\tfor( const TPair<FString, TSharedPtr<FJsonValue> > &l_Pair : l_Obj->Values )\n"
+						"\t\t{\n"
+						"\t\t\t" + cellType2UE4Value((*l_ParamIt)->m_Type, cellType2UE4Type((*l_ParamIt)->m_Type) + " l_Key", "l_Pair.Key", false) + "\n"
+						"\t\t\tU" + l_ChildTypeStr + " *l_pNewObj = NewObject<U" + l_ChildTypeStr + ">();\n"
+						"\t\t\tl_pNewObj->parseTable(l_Pair.Value->AsObject());\n"
+						"\t\t\tm_" + l_ChildTypeStr + ".Add(l_Key, l_pNewObj);\n"
+						"\t\t}\n"
+						"\t}\n\n";
+					}break;
+
+				case LINK_ARRAY:{
+					std::string l_ChildTypeStr = (*l_ParamIt)->m_pChildRefTable->m_Tablename;
+					a_CppOutput +=
+						"\n\t{\n"
+						"\t\tconst TArray<TSharedPtr<FJsonValue> > l_Array = a_pNode->GetArrayField(\"" + l_ChildTypeStr + "\");\n"
+						"\t\tfor( int32 i=0 ; i<l_Array.Num() ; ++i )\n"
+						"\t\t{\n"
+						"\t\t\tU" + l_ChildTypeStr + " *l_pNewItem = NewObject<U" + l_ChildTypeStr + ">();\n"
+						"\t\t\tl_pNewItem->parseTable(l_Array[i]->AsObject());\n"
+						"\t\t\tm_" + (*l_ParamIt)->m_Name + ".Push(l_pNewItem);\n"
+						"\t\t}\n"
+						"\t}\n\n";
+					}break;
+
+				//case LINK_NONE:
+				default:{
+					switch( (*l_ParamIt)->m_Type )
+					{
+						case CELL_INT:
+							a_CppOutput += "\tm_" + (*l_ParamIt)->m_Name + " = " + "a_pNode->GetIntegerField(\"" + (*l_ParamIt)->m_Name +"\");\n";
+							break;
+
+						case CELL_FLOAT:
+							a_CppOutput += "\tm_" + (*l_ParamIt)->m_Name + " = " + "a_pNode->GetNumberField(\"" + (*l_ParamIt)->m_Name +"\");\n";
+							break;
+
+						case CELL_TEXT:
+							a_CppOutput += "\tm_" + (*l_ParamIt)->m_Name + " = " + "a_pNode->GetStringField(\"" + (*l_ParamIt)->m_Name +"\");\n";
+							break;
+
+						default:
+							assert(false && "invalid key cell type");
+							break;
+					}
+					}break;
+			}
+		}
+		a_CppOutput += "}\n\n";
+	}
+
+	a_CppOutput +=
+		"void U" + a_ClassName + "::parseTable(FString &a_Filename)\n"
+		"{\n"
+		"\tFString l_FileString;\n"
+		"\tFFileHelper::LoadFileToString(l_FileString, *a_Filename);\n"
+		"\tTSharedPtr<FJsonObject> l_JsonObject = MakeShareable(new FJsonObject());\n"
+		"\tTSharedRef<TJsonReader<> > l_JsonReader = TJsonReaderFactory<>::Create(l_FileString);\n"
+		"\tif( !FJsonSerializer::Deserialize(l_JsonReader, l_JsonObject) || !l_JsonObject.IsValid() ) return;\n\n"
+		"\tTMap< FString, TSharedPtr<FJsonValue> > &l_Root = l_JsonObject->Values;\n"
+		"\tfor( const TPair<FString, TSharedPtr<FJsonValue> > &l_Pair : l_Root )\n"
+		"\t{\n"
+		"\t\t" + cellType2UE4Value(a_pNode->m_Type, cellType2UE4Type(a_pNode->m_Type) + " l_Key", "l_Pair.Key", false) + "\n"
+		"\t\tU" + a_pNode->m_pRefTable->m_Tablename + " *l_pNewObj = NewObject<U" + a_pNode->m_pRefTable->m_Tablename + ">();\n"
+		"\t\tl_pNewObj->parseTable(l_Pair.Value->AsObject());\n"
+		"\t\tm_" + a_pNode->m_pRefTable->m_Tablename + ".Add(l_Key, l_pNewObj);\n"
+		"\t}\n"
+		"}";
+}
+
+std::string Converter::cellType2UE4Type(CellType a_Type)
+{
+	switch( a_Type )
+	{
+		case CELL_INT:	return "int32";
+		case CELL_FLOAT:return "float";
+		case CELL_TEXT:	return "FString";
+		default: assert(false && "unknown cell type");
+	}
+	return "";
+}
+
+std::string Converter::cellType2UE4Value(CellType a_Type, std::string a_TargetStr, std::string a_SrcStr, bool a_bSrcIsJson)
+{
+	switch( a_Type )
+	{
+		case CELL_INT:	return a_TargetStr + " = FCString::Atoi(" + (a_bSrcIsJson ? "*" + a_SrcStr + "->AsString());" : a_SrcStr + ");");
+		case CELL_FLOAT:return a_TargetStr + " = FCString::Atof(" + (a_bSrcIsJson ? "*" + a_SrcStr + "->AsNumber());" : a_SrcStr + ");");
+		case CELL_TEXT:	return a_TargetStr + " = " + a_SrcStr + (a_bSrcIsJson ? "->AsString();" : ";");
+		default:
+			assert(false && "invalid key cell type");
+			break;
+	}
+	return "";
 }
 #pragma endregion

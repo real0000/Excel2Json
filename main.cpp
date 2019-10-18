@@ -17,7 +17,7 @@ int main(int a_Argc, char *a_Argv[])
 {
 	bool l_bPretty = false;
 	std::string l_File("");
-	for( unsigned int i=1 ; i<a_Argc ; ++i )
+	for( int i=1 ; i<a_Argc ; ++i )
 	{
 		if( 0 == strcmp(a_Argv[i], "-f") )
 		{
