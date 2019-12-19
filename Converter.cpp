@@ -589,20 +589,20 @@ void Converter::initUE4Buffer(std::string &a_HeaderOutput, std::string &a_CppOut
 				case LINK_OBJ:{
 					a_CppOutput +=
 						"\tm_p" + (*l_ParamIt)->m_Name + " = NewObject<U" + (*l_ParamIt)->m_pChildRefTable->m_Tablename + ">();\n"
-						"\tm_p" + (*l_ParamIt)->m_Name + "->parseTable(" + "a_pNode->GetObjectField("+ (*l_ParamIt)->m_Name +")" +");\n";
+						"\tm_p" + (*l_ParamIt)->m_Name + "->parseTable(a_pNode->GetObjectField("+ (*l_ParamIt)->m_Name +"));\n";
 					}break;
 
 				case LINK_DICT:{
 					std::string l_ChildTypeStr = (*l_ParamIt)->m_pChildRefTable->m_Tablename;
 					a_CppOutput +=
 						"\n\t{\n"
-						"\t\tconst TSharedPtr<FJsonObject> l_Obj = a_pNode->GetObjectField(\"" + l_ChildTypeStr + "\")\n"
+						"\t\tconst TSharedPtr<FJsonObject> l_Obj = a_pNode->GetObjectField(\"" + l_ChildTypeStr + "\");\n"
 						"\t\tfor( const TPair<FString, TSharedPtr<FJsonValue> > &l_Pair : l_Obj->Values )\n"
 						"\t\t{\n"
 						"\t\t\t" + cellType2UE4Value((*l_ParamIt)->m_Type, cellType2UE4Type((*l_ParamIt)->m_Type) + " l_Key", "l_Pair.Key", false) + "\n"
 						"\t\t\tU" + l_ChildTypeStr + " *l_pNewObj = NewObject<U" + l_ChildTypeStr + ">();\n"
 						"\t\t\tl_pNewObj->parseTable(l_Pair.Value->AsObject());\n"
-						"\t\t\tm_" + l_ChildTypeStr + ".Add(l_Key, l_pNewObj);\n"
+						"\t\t\tm_" + (*l_ParamIt)->m_Name + ".Add(l_Key, l_pNewObj);\n"
 						"\t\t}\n"
 						"\t}\n\n";
 					}break;
